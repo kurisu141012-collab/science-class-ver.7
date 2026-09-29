@@ -201,7 +201,6 @@
             <div id="hints-editor-list" class="space-y-3"></div>
           </div>
           
-          <!-- 要望反映：変更を保存ボタン -->
           <div class="mt-6 pt-4 border-t border-slate-300 flex items-center justify-between">
             <span class="text-xs text-slate-500 font-bold">※編集後は必ず「変更を保存」ボタンを押して反映してください。</span>
             <button onclick="saveAndSyncSettings()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 rounded-lg font-bold shadow text-sm flex items-center gap-2 transition transform active:scale-95">
@@ -238,7 +237,6 @@
 
       <!-- タブ1: 全体一覧スクリーン -->
       <div id="tab-screen" class="bg-white p-5 rounded-xl shadow space-y-4 min-h-[600px]">
-        <!-- TV投影・スクリーン用 模範解答表示エリア（公開時のみ表示） -->
         <div id="teacher-screen-model-answer-banner" class="hidden bg-amber-50 border-2 border-amber-400 p-4 rounded-xl shadow space-y-2">
           <div class="flex justify-between items-center border-b border-amber-200 pb-2">
             <span class="font-bold text-amber-950 text-base flex items-center gap-2">
@@ -291,7 +289,6 @@
         <span id="student-status-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">待機中</span>
       </div>
 
-      <!-- 子機用 模範解答解説バナー（先生が公開したとき自動表示） -->
       <div id="student-model-answers-banner" class="hidden bg-amber-50 border-2 border-amber-400 p-5 rounded-xl shadow space-y-3">
         <div class="font-bold text-amber-950 text-base flex items-center gap-2 border-b border-amber-200 pb-2">
           <span>💡</span> <span>先生からの模範解答・解説</span>
@@ -446,11 +443,10 @@
     };
 
     let activeLessonId = null;
-    let studentHasSubmitted = false;
+    let isEditingMode = false;
     let tempPhotos = {};
     let isTvModeActive = false;
 
-    // 編集画面の下書き用一時保持変数（「変更を保存」ボタンを押すまで確定しない）
     let draftQuestions = [];
     let draftHints = [];
 
@@ -469,7 +465,6 @@
       const urlLessonId = params.get('lesson');
       const urlRole = params.get('role');
 
-      // クラウド全体の授業・学年データをリアルタイム購読
       db.ref('classroom').on('value', (snapshot) => {
         const val = snapshot.val();
         if (val) {
@@ -781,7 +776,7 @@
         state: {
           mode: 'individual',
           isAccepting: false,
-          showModelAnswers: false, // 模範解答公開フラグ
+          showModelAnswers: false,
           individualQuestions: [
             { id: 1, text: "問1: 実験の予想と理由を書きなさい。", modelAnswer: "" },
             { id: 2, text: "問2: 実験結果から何が分かりましたか。考察を書きなさい。", modelAnswer: "" }
@@ -833,7 +828,6 @@
       db.ref(`classroom/lessons/${lesson.id}/state/isAccepting`).set(accepting);
     }
 
-    // 模範解答の公開/非公開トグル
     function toggleShowModelAnswers() {
       const lesson = getActiveLesson();
       if (!lesson) return;
@@ -875,7 +869,7 @@
     }
 
     // =========================================================
-    // 設問・ヒントの編集処理（変更を保存ボタンによる確定）
+    // 設問・ヒントの編集処理
     // =========================================================
     function initDraftsFromLesson() {
       const lesson = getActiveLesson();
@@ -965,7 +959,6 @@
       renderTeacherHintsEditor();
     }
 
-    // 「変更を保存」ボタンが押された時のみFirebaseに反映
     function saveAndSyncSettings() {
       const lesson = getActiveLesson();
       if (!lesson) return;
@@ -1035,14 +1028,15 @@
         tag.textContent = lesson.state.mode === 'individual' ? '👤 個人ワーク' : '👥 班活動';
         tag.className = lesson.state.mode === 'individual' 
           ? 'text-xs bg-teal-600 px-2.5 py-1 rounded-full font-bold' 
-          : 'text-xs bg-amber-600 px-2.5 py-1 rounded-full font-bold';
+          : 'text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-bold';
       }
 
       document.getElementById('mode-btn-ind').className = lesson.state.mode === 'individual' 
         ? 'px-3 py-1.5 rounded-lg text-sm font-bold bg-teal-700 text-white shadow' 
         : 'px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-200 text-slate-700 hover:bg-slate-300';
+      
       document.getElementById('mode-btn-grp').className = lesson.state.mode === 'group' 
-        ? 'px-3 py-1.5 rounded-lg text-sm font-bold bg-teal-700 text-white shadow' 
+        ? 'px-3 py-1.5 rounded-lg text-sm font-bold bg-emerald-600 text-white shadow hover:bg-emerald-700' 
         : 'px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-200 text-slate-700 hover:bg-slate-300';
 
       initDraftsFromLesson();
@@ -1058,7 +1052,6 @@
 
       const isModelShown = !!lesson.state.showModelAnswers;
 
-      // 模範解答ボタンの表示切り替え（操作パネル）
       const btnModelText = document.getElementById('btn-toggle-model-text');
       const btnModelIcon = document.getElementById('btn-toggle-model-icon');
       const btnModel = document.getElementById('btn-toggle-model');
@@ -1074,13 +1067,11 @@
         }
       }
 
-      // 模範解答ボタン（TV投影バー）
       const tvBtnModelText = document.getElementById('tv-btn-toggle-model-text');
       if (tvBtnModelText) {
         tvBtnModelText.textContent = isModelShown ? "模範解答を非公開" : "模範解答を公開";
       }
 
-      // スクリーン上部の模範解答バナー描画
       const screenModelBanner = document.getElementById('teacher-screen-model-answer-banner');
       const screenModelList = document.getElementById('teacher-screen-model-answers-list');
       const questions = getActiveQuestions();
@@ -1099,7 +1090,6 @@
         screenModelBanner.classList.add('hidden');
       }
 
-      // 受付ステータスバッジ
       const badge = document.getElementById('teacher-status-badge');
       if (lesson.state.isAccepting) {
         badge.textContent = "回答受付中";
@@ -1261,6 +1251,15 @@
     // =========================================================
     // 子機（生徒）表示更新
     // =========================================================
+    function getMySubmissionKey(lesson) {
+      if (!lesson) return mySubmissionId;
+      if (lesson.state.mode === 'group') {
+        const savedGroupName = localStorage.getItem(`group_choice_${lesson.id}`);
+        return savedGroupName || null;
+      }
+      return mySubmissionId;
+    }
+
     function updateStudentViews() {
       const lesson = getActiveLesson();
       if (!lesson) return;
@@ -1281,16 +1280,18 @@
       if (modeBadge) modeBadge.textContent = modeText;
       if (headerModeBadge) headerModeBadge.textContent = modeText;
 
+      const isAccepting = !!lesson.state.isAccepting;
+
       if (statusBadge) {
-        statusBadge.textContent = lesson.state.isAccepting ? '受付中' : '締切/待機';
-        statusBadge.className = lesson.state.isAccepting 
+        statusBadge.textContent = isAccepting ? '受付中' : '締切/待機';
+        statusBadge.className = isAccepting 
           ? 'text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 animate-pulse' 
           : 'text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
       }
 
       document.getElementById('student-form-title').textContent = lesson.state.mode === 'individual' ? '理科の回答を入力（個人）' : '班の回答を入力（話し合い活動）';
 
-      // 子機画面の模範解答・解説バナー同期表示
+      // 模範解答の表示制御
       const studentModelBanner = document.getElementById('student-model-answers-banner');
       const studentModelContent = document.getElementById('student-model-answers-content');
       const questions = getActiveQuestions();
@@ -1308,33 +1309,76 @@
         studentModelBanner.classList.add('hidden');
       }
 
-      const currentAnswers = getCurrentModeAnswers();
+      // 既存の提出データを特定
+      const currentMode = lesson.state.mode;
+      const allAnswers = lesson.state.answers || {};
+      
+      let foundMyAns = null;
+      if (currentMode === 'individual') {
+        foundMyAns = allAnswers[mySubmissionId] || null;
+      } else {
+        const savedGroupName = localStorage.getItem(`group_choice_${lesson.id}`);
+        if (savedGroupName && allAnswers[savedGroupName] && allAnswers[savedGroupName].mode === 'group') {
+          foundMyAns = allAnswers[savedGroupName];
+        } else if (lastMyAnswer && lastMyAnswer.mode === 'group' && allAnswers[lastMyAnswer.name]) {
+          foundMyAns = allAnswers[lastMyAnswer.name];
+        }
+      }
+      if (foundMyAns) {
+        lastMyAnswer = foundMyAns;
+      }
 
-      if (lesson.state.isAccepting && studentHasSubmitted) {
+      const hasSubmitted = !!foundMyAns;
+
+      // 締切時のメッセージ調整
+      const peerTitle = document.getElementById('peer-review-title');
+      const peerStatus = document.getElementById('peer-review-status-text');
+      if (!isAccepting) {
+        if (hasSubmitted) {
+          peerTitle.textContent = "🛑 回答は締め切られました（提出完了）";
+          peerStatus.textContent = "クラスメイトの回答や解説を確認してみましょう。";
+        } else {
+          peerTitle.textContent = "🛑 回答は締め切られました";
+          peerStatus.textContent = "現在、回答の受付を停止しています。提出された回答を閲覧できます。";
+        }
+      } else {
+        peerTitle.textContent = "✅ あなたの回答は送信されました！";
+        peerStatus.textContent = "クラスの回答を参考に見てみましょう";
+      }
+
+      // 「回答を修正」ボタン：受付中 かつ 提出済み のときのみ表示
+      if (isAccepting && hasSubmitted) {
         btnEdit.classList.remove('hidden');
       } else {
         btnEdit.classList.add('hidden');
       }
 
-      if (!lesson.state.isAccepting && currentAnswers.length > 0) {
+      // 画面の出し分けルール
+      if (!isAccepting) {
+        // 1. 強制締め切り時: 編集画面を閉じ、全員クラス回答一覧画面を表示
+        isEditingMode = false;
         waiting.classList.add('hidden');
         form.classList.add('hidden');
         peerCard.classList.remove('hidden');
         renderPeerAnswers();
-      } else if (studentHasSubmitted) {
-        waiting.classList.add('hidden');
-        form.classList.add('hidden');
-        peerCard.classList.remove('hidden');
-        renderPeerAnswers();
-      } else if (lesson.state.isAccepting) {
+      } else if (isEditingMode) {
+        // 2. 受付中で、明示的に修正ボタンを押した時
         waiting.classList.add('hidden');
         form.classList.remove('hidden');
         peerCard.classList.add('hidden');
         renderStudentInputForm();
-      } else {
-        waiting.classList.remove('hidden');
+      } else if (hasSubmitted) {
+        // 3. 受付中で、すでに送信済みの場合: 一覧カード表示（修正ボタンあり）
+        waiting.classList.add('hidden');
         form.classList.add('hidden');
+        peerCard.classList.remove('hidden');
+        renderPeerAnswers();
+      } else {
+        // 4. 受付中で、未提出の場合: 入力フォーム表示
+        waiting.classList.add('hidden');
+        form.classList.remove('hidden');
         peerCard.classList.add('hidden');
+        renderStudentInputForm();
       }
     }
 
@@ -1409,7 +1453,12 @@
     }
 
     function editMyAnswer() {
-      studentHasSubmitted = false;
+      const lesson = getActiveLesson();
+      if (!lesson || !lesson.state.isAccepting) {
+        alert('現在は受付が締め切られているため修正できません');
+        return;
+      }
+      isEditingMode = true;
       updateStudentViews();
     }
 
@@ -1462,6 +1511,10 @@
         }
       }
 
+      if (lesson.state.mode === 'group') {
+        localStorage.setItem(`group_choice_${lesson.id}`, name);
+      }
+
       const questions = getActiveQuestions();
       const responses = questions.map((q, idx) => {
         const elem = document.getElementById(`stu-ans-${idx}`);
@@ -1484,7 +1537,7 @@
       lastMyAnswer = newAns;
 
       db.ref(`classroom/lessons/${lesson.id}/state/answers/${uniqueKey}`).set(newAns).then(() => {
-        studentHasSubmitted = true;
+        isEditingMode = false;
         if (submitBtn) submitBtn.disabled = false;
         updateStudentViews();
         showToast('🚀 回答を先生に送信しました！');
@@ -1510,9 +1563,11 @@
         return;
       }
 
+      const myKey = getMySubmissionKey(lesson);
+
       container.innerHTML = currentAnswers.map((ans, idx) => {
         const displayName = ans.mode === 'individual' ? `生徒 ${String.fromCharCode(65 + (idx % 26))}` : ans.name;
-        const isMe = (ans.submissionKey === ((ans.mode === 'group') ? ans.name : mySubmissionId));
+        const isMe = (ans.submissionKey === myKey) || (ans.mode === 'group' && lastMyAnswer && ans.name === lastMyAnswer.name);
 
         return `
           <div class="p-4 border rounded-xl ${isMe ? 'bg-teal-50 border-teal-400 ring-2 ring-teal-200' : 'bg-slate-50'} space-y-3">
