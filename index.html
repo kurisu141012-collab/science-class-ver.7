@@ -167,6 +167,12 @@
           <button onclick="toggleAccepting(false)" id="btn-stop" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition">
             🛑 強制締め切り
           </button>
+          
+          <!-- 模範解答ワンクリック公開/非公開ボタン -->
+          <button onclick="toggleShowModelAnswers()" id="btn-toggle-model" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition flex items-center gap-1.5">
+            <span id="btn-toggle-model-icon">💡</span> <span id="btn-toggle-model-text">模範解答を公開</span>
+          </button>
+
           <button onclick="toggleTvMode(true)" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition flex items-center gap-1">
             📺 TV投影モード
           </button>
@@ -178,29 +184,41 @@
           </button>
         </div>
 
+        <!-- 編集用アコーディオン -->
         <details class="bg-slate-50 p-4 rounded-lg border text-sm" id="editor-details">
           <summary class="font-bold cursor-pointer text-teal-800 select-none">
             ⚙️ 問題・模範解答・ヒントカードの編集（クリックで開閉）
           </summary>
           <div class="mt-4 space-y-4" id="questions-editor-list"></div>
           <div class="mt-3 flex gap-2">
-            <button onclick="addQuestion()" class="bg-teal-100 text-teal-800 px-3 py-1 rounded font-bold hover:bg-teal-200">+ 小問を追加</button>
+            <button onclick="addQuestionDraft()" class="bg-teal-100 text-teal-800 px-3 py-1.5 rounded font-bold hover:bg-teal-200 text-xs">+ 小問を追加</button>
           </div>
           <div class="mt-6 pt-4 border-t border-slate-300">
             <div class="flex justify-between items-center mb-2">
               <span class="font-bold text-amber-800">💡 班活動用ヒントカードの設定</span>
-              <button onclick="addHint()" class="bg-amber-100 text-amber-800 px-3 py-1 rounded text-xs font-bold hover:bg-amber-200">+ ヒントを追加</button>
+              <button onclick="addHintDraft()" class="bg-amber-100 text-amber-800 px-3 py-1.5 rounded text-xs font-bold hover:bg-amber-200">+ ヒントを追加</button>
             </div>
             <div id="hints-editor-list" class="space-y-3"></div>
           </div>
-          <div class="mt-5 pt-3 border-t flex justify-end">
-            <button onclick="saveAndSyncSettings()" class="bg-teal-700 text-white px-5 py-2 rounded-lg font-bold hover:bg-teal-800 shadow">設定を保存して生徒に配信</button>
+          
+          <!-- 要望反映：変更を保存ボタン -->
+          <div class="mt-6 pt-4 border-t border-slate-300 flex items-center justify-between">
+            <span class="text-xs text-slate-500 font-bold">※編集後は必ず「変更を保存」ボタンを押して反映してください。</span>
+            <button onclick="saveAndSyncSettings()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 rounded-lg font-bold shadow text-sm flex items-center gap-2 transition transform active:scale-95">
+              <span>💾</span> <span>変更を保存して生徒に配信</span>
+            </button>
           </div>
         </details>
       </div>
 
-      <div id="tv-exit-bar" class="hidden flex justify-between items-center bg-teal-950 text-white px-5 py-2.5 rounded-lg shadow-lg">
-        <span class="text-sm font-bold text-teal-200">📺 TV投影中（生徒の名前は非表示・着順のみ表示中）</span>
+      <!-- TV投影用操作バー -->
+      <div id="tv-exit-bar" class="hidden flex flex-wrap justify-between items-center bg-teal-950 text-white px-5 py-2.5 rounded-lg shadow-lg gap-2">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-bold text-teal-200">📺 TV投影中（生徒の名前は非表示・着順のみ表示中）</span>
+          <button onclick="toggleShowModelAnswers()" id="tv-btn-toggle-model" class="bg-amber-500 hover:bg-amber-600 text-slate-900 px-3 py-1 rounded font-bold text-xs shadow flex items-center gap-1 transition">
+            <span>💡</span> <span id="tv-btn-toggle-model-text">模範解答を公開</span>
+          </button>
+        </div>
         <button onclick="toggleTvMode(false)" class="bg-white text-teal-900 px-4 py-1 rounded font-bold text-sm hover:bg-slate-100 shadow">
           ✖ 操作パネルに戻る
         </button>
@@ -218,7 +236,19 @@
         </button>
       </div>
 
-      <div id="tab-screen" class="bg-white p-5 rounded-xl shadow space-y-3 min-h-[600px]">
+      <!-- タブ1: 全体一覧スクリーン -->
+      <div id="tab-screen" class="bg-white p-5 rounded-xl shadow space-y-4 min-h-[600px]">
+        <!-- TV投影・スクリーン用 模範解答表示エリア（公開時のみ表示） -->
+        <div id="teacher-screen-model-answer-banner" class="hidden bg-amber-50 border-2 border-amber-400 p-4 rounded-xl shadow space-y-2">
+          <div class="flex justify-between items-center border-b border-amber-200 pb-2">
+            <span class="font-bold text-amber-950 text-base flex items-center gap-2">
+              <span>💡</span> <span>【解説・模範解答】</span>
+            </span>
+            <span class="text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold">生徒画面にも公開中</span>
+          </div>
+          <div id="teacher-screen-model-answers-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1"></div>
+        </div>
+
         <div class="flex justify-between items-center border-b pb-2">
           <h2 id="screen-title" class="font-bold text-slate-800 text-base flex items-center gap-2">
             🖥️ <span id="screen-title-text">クラス全体の回答状況（40人対応 5×8表示）</span>
@@ -228,6 +258,7 @@
         <div id="grid-main-screen" class="grid grid-cols-5 gap-2.5"></div>
       </div>
 
+      <!-- タブ2: 問題ごと -->
       <div id="tab-by-question" class="hidden bg-white p-5 rounded-xl shadow space-y-6">
         <div class="flex justify-between items-center border-b pb-3">
           <h2 class="font-bold text-slate-800 text-lg">📊 問題ごとの回答集計・比較</h2>
@@ -236,6 +267,7 @@
         <div id="by-question-content" class="space-y-8"></div>
       </div>
 
+      <!-- タブ3: 個別確認 -->
       <div id="tab-individual" class="hidden bg-white p-5 rounded-xl shadow space-y-4">
         <div class="flex items-center gap-3">
           <label class="font-bold text-sm text-slate-600">表示対象:</label>
@@ -257,6 +289,14 @@
           <h2 class="text-base font-bold text-slate-800 mt-1" id="student-view-title">理科授業</h2>
         </div>
         <span id="student-status-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">待機中</span>
+      </div>
+
+      <!-- 子機用 模範解答解説バナー（先生が公開したとき自動表示） -->
+      <div id="student-model-answers-banner" class="hidden bg-amber-50 border-2 border-amber-400 p-5 rounded-xl shadow space-y-3">
+        <div class="font-bold text-amber-950 text-base flex items-center gap-2 border-b border-amber-200 pb-2">
+          <span>💡</span> <span>先生からの模範解答・解説</span>
+        </div>
+        <div id="student-model-answers-content" class="space-y-3 text-sm"></div>
       </div>
 
       <div id="student-waiting-card" class="bg-white p-10 rounded-xl shadow text-center py-16">
@@ -380,7 +420,7 @@
 
   <script>
     // =========================================================
-    // Firebase 設定（ご提示いただいたキーを組み込み済み）
+    // Firebase 設定
     // =========================================================
     const firebaseConfig = {
       apiKey: "AIzaSyA-1eARfzkG6owiE22hZABvxP7sBTyN2cI",
@@ -410,6 +450,10 @@
     let tempPhotos = {};
     let isTvModeActive = false;
 
+    // 編集画面の下書き用一時保持変数（「変更を保存」ボタンを押すまで確定しない）
+    let draftQuestions = [];
+    let draftHints = [];
+
     let mySubmissionId = localStorage.getItem('my_submission_id');
     if (!mySubmissionId) {
       mySubmissionId = 'sub_' + Math.random().toString(36).substring(2, 10);
@@ -438,7 +482,6 @@
             appStore.lessons = [];
           }
         } else {
-          // 初回起動時：初期データをクラウドへ書き込み
           syncEntireStoreToCloud();
         }
 
@@ -467,7 +510,7 @@
     }
 
     function syncLessonToCloud(lesson) {
-      db.ref(`classroom/lessons/${lesson.id}`).set(lesson);
+      return db.ref(`classroom/lessons/${lesson.id}`).set(lesson);
     }
 
     function getActiveLesson() {
@@ -528,6 +571,7 @@
       document.getElementById('teacher-lesson-actions').classList.remove('hidden');
       document.getElementById('teacher-manager-actions').classList.add('hidden');
 
+      initDraftsFromLesson();
       renderTeacherQuestionEditor();
       renderTeacherHintsEditor();
       updateAllDisplays();
@@ -636,7 +680,7 @@
     }
 
     // =========================================================
-    // QRコード生成（Web URLを正確に埋め込み）
+    // QRコード生成
     // =========================================================
     function getStudentAccessUrl(lessonId) {
       const loc = window.location;
@@ -708,7 +752,7 @@
     }
 
     // =========================================================
-    // 授業の作成・フォルダ操作
+    // 授業の新規作成・フォルダ
     // =========================================================
     function openNewLessonModal() {
       const select = document.getElementById('new-lesson-grade');
@@ -737,6 +781,7 @@
         state: {
           mode: 'individual',
           isAccepting: false,
+          showModelAnswers: false, // 模範解答公開フラグ
           individualQuestions: [
             { id: 1, text: "問1: 実験の予想と理由を書きなさい。", modelAnswer: "" },
             { id: 2, text: "問2: 実験結果から何が分かりましたか。考察を書きなさい。", modelAnswer: "" }
@@ -788,6 +833,17 @@
       db.ref(`classroom/lessons/${lesson.id}/state/isAccepting`).set(accepting);
     }
 
+    // 模範解答の公開/非公開トグル
+    function toggleShowModelAnswers() {
+      const lesson = getActiveLesson();
+      if (!lesson) return;
+      const current = !!lesson.state.showModelAnswers;
+      const next = !current;
+      db.ref(`classroom/lessons/${lesson.id}/state/showModelAnswers`).set(next).then(() => {
+        showToast(next ? '💡 模範解答を生徒画面・スクリーンへ公開しました' : '🔒 模範解答を非公開にしました');
+      });
+    }
+
     function resetDataConfirm() {
       const lesson = getActiveLesson();
       if (!lesson) return;
@@ -818,102 +874,115 @@
       return Object.values(lesson.state.answers).filter(a => a.mode === lesson.state.mode);
     }
 
-    function renderTeacherQuestionEditor() {
-      const lesson = getActiveLesson();
-      if (!lesson) return;
-      const container = document.getElementById('questions-editor-list');
-      const questions = getActiveQuestions();
-      container.innerHTML = questions.map((q, idx) => `
-        <div class="p-3 bg-white border rounded-lg space-y-2">
-          <div class="flex justify-between items-center">
-            <span class="font-bold text-teal-800">問${idx + 1} の設定</span>
-            <button onclick="removeQuestion(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold">削除</button>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-500 mb-1">問題文:</label>
-            <input type="text" id="edit-q-text-${idx}" value="${q.text}" class="w-full p-2 border rounded text-sm">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-indigo-600 mb-1">模範解答:</label>
-            <input type="text" id="edit-q-model-${idx}" value="${q.modelAnswer || ''}" class="w-full p-2 border border-indigo-200 rounded text-sm bg-indigo-50/30">
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function addQuestion() {
+    // =========================================================
+    // 設問・ヒントの編集処理（変更を保存ボタンによる確定）
+    // =========================================================
+    function initDraftsFromLesson() {
       const lesson = getActiveLesson();
       if (!lesson) return;
       const questions = getActiveQuestions();
-      questions.push({ id: Date.now(), text: `問${questions.length + 1}: `, modelAnswer: "" });
-      saveAndSyncSettings();
+      draftQuestions = JSON.parse(JSON.stringify(questions));
+      draftHints = JSON.parse(JSON.stringify(lesson.state.hints || []));
     }
 
-    function removeQuestion(index) {
-      const lesson = getActiveLesson();
-      if (!lesson) return;
-      const questions = getActiveQuestions();
-      if (questions.length <= 1) { alert('小問は最低1問必要です'); return; }
-      questions.splice(index, 1);
-      saveAndSyncSettings();
-    }
-
-    function renderTeacherHintsEditor() {
-      const lesson = getActiveLesson();
-      if (!lesson) return;
-      const container = document.getElementById('hints-editor-list');
-      const hints = lesson.state.hints || [];
-      container.innerHTML = hints.map((h, idx) => `
-        <div class="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
-          <div class="flex justify-between items-center">
-            <span class="font-bold text-xs text-amber-900">ヒント ${idx + 1}</span>
-            <button onclick="removeHint(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold">削除</button>
-          </div>
-          <div class="flex gap-2">
-            <input type="text" id="edit-hint-title-${idx}" value="${h.title}" class="w-1/3 p-1.5 border rounded text-xs">
-            <input type="text" id="edit-hint-text-${idx}" value="${h.text}" class="w-2/3 p-1.5 border rounded text-xs">
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function addHint() {
-      const lesson = getActiveLesson();
-      if (!lesson) return;
-      if (!lesson.state.hints) lesson.state.hints = [];
-      lesson.state.hints.push({ id: Date.now(), title: `ヒント ${lesson.state.hints.length + 1}`, text: "" });
-      saveAndSyncSettings();
-    }
-
-    function removeHint(index) {
-      const lesson = getActiveLesson();
-      if (!lesson || !lesson.state.hints) return;
-      lesson.state.hints.splice(index, 1);
-      saveAndSyncSettings();
-    }
-
-    function saveAndSyncSettings() {
-      const lesson = getActiveLesson();
-      if (!lesson) return;
-      const questions = getActiveQuestions();
-      questions.forEach((q, idx) => {
+    function collectDraftValuesFromInputs() {
+      draftQuestions.forEach((q, idx) => {
         const textElem = document.getElementById(`edit-q-text-${idx}`);
         const modelElem = document.getElementById(`edit-q-model-${idx}`);
         if (textElem) q.text = textElem.value;
         if (modelElem) q.modelAnswer = modelElem.value;
       });
 
-      if (lesson.state.hints) {
-        lesson.state.hints.forEach((h, idx) => {
-          const titleElem = document.getElementById(`edit-hint-title-${idx}`);
-          const textElem = document.getElementById(`edit-hint-text-${idx}`);
-          if (titleElem) h.title = titleElem.value;
-          if (textElem) h.text = textElem.value;
-        });
-      }
+      draftHints.forEach((h, idx) => {
+        const titleElem = document.getElementById(`edit-hint-title-${idx}`);
+        const textElem = document.getElementById(`edit-hint-text-${idx}`);
+        if (titleElem) h.title = titleElem.value;
+        if (textElem) h.text = textElem.value;
+      });
+    }
 
-      syncLessonToCloud(lesson);
-      showToast('✅ 設定を保存し、クラウド経由で生徒に配信しました！');
+    function renderTeacherQuestionEditor() {
+      const container = document.getElementById('questions-editor-list');
+      container.innerHTML = draftQuestions.map((q, idx) => `
+        <div class="p-3 bg-white border rounded-lg space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-teal-800">問${idx + 1} の設定</span>
+            <button onclick="removeQuestionDraft(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold">削除</button>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1">問題文:</label>
+            <input type="text" id="edit-q-text-${idx}" value="${q.text || ''}" class="w-full p-2 border rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-indigo-600 mb-1">模範解答・解説（ワンクリックで提示可能）:</label>
+            <input type="text" id="edit-q-model-${idx}" value="${q.modelAnswer || ''}" placeholder="例: 酸化銅から酸素が奪われて銅が生じ、気体の二酸化炭素が発生する。" class="w-full p-2 border border-indigo-200 rounded text-sm bg-indigo-50/40">
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addQuestionDraft() {
+      collectDraftValuesFromInputs();
+      draftQuestions.push({ id: Date.now(), text: `問${draftQuestions.length + 1}: `, modelAnswer: "" });
+      renderTeacherQuestionEditor();
+    }
+
+    function removeQuestionDraft(index) {
+      collectDraftValuesFromInputs();
+      if (draftQuestions.length <= 1) { 
+        alert('小問は最低1問必要です'); 
+        return; 
+      }
+      draftQuestions.splice(index, 1);
+      renderTeacherQuestionEditor();
+    }
+
+    function renderTeacherHintsEditor() {
+      const container = document.getElementById('hints-editor-list');
+      container.innerHTML = draftHints.map((h, idx) => `
+        <div class="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-xs text-amber-900">ヒント ${idx + 1}</span>
+            <button onclick="removeHintDraft(${idx})" class="text-rose-500 hover:text-rose-700 text-xs font-bold">削除</button>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="edit-hint-title-${idx}" value="${h.title || ''}" placeholder="見出し" class="w-1/3 p-1.5 border rounded text-xs">
+            <input type="text" id="edit-hint-text-${idx}" value="${h.text || ''}" placeholder="ヒント内容" class="w-2/3 p-1.5 border rounded text-xs">
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addHintDraft() {
+      collectDraftValuesFromInputs();
+      draftHints.push({ id: Date.now(), title: `ヒント ${draftHints.length + 1}`, text: "" });
+      renderTeacherHintsEditor();
+    }
+
+    function removeHintDraft(index) {
+      collectDraftValuesFromInputs();
+      draftHints.splice(index, 1);
+      renderTeacherHintsEditor();
+    }
+
+    // 「変更を保存」ボタンが押された時のみFirebaseに反映
+    function saveAndSyncSettings() {
+      const lesson = getActiveLesson();
+      if (!lesson) return;
+
+      collectDraftValuesFromInputs();
+
+      if (lesson.state.mode === 'individual') {
+        lesson.state.individualQuestions = JSON.parse(JSON.stringify(draftQuestions));
+      } else {
+        lesson.state.groupQuestions = JSON.parse(JSON.stringify(draftQuestions));
+      }
+      lesson.state.hints = JSON.parse(JSON.stringify(draftHints));
+
+      syncLessonToCloud(lesson).then(() => {
+        showToast('💾 設問・模範解答の変更を保存し、生徒に配信しました！');
+        updateAllDisplays();
+      });
     }
 
     function switchTeacherTab(tab) {
@@ -976,6 +1045,10 @@
         ? 'px-3 py-1.5 rounded-lg text-sm font-bold bg-teal-700 text-white shadow' 
         : 'px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-200 text-slate-700 hover:bg-slate-300';
 
+      initDraftsFromLesson();
+      renderTeacherQuestionEditor();
+      renderTeacherHintsEditor();
+
       updateTeacherViews();
     }
 
@@ -983,6 +1056,50 @@
       const lesson = getActiveLesson();
       if (!lesson) return;
 
+      const isModelShown = !!lesson.state.showModelAnswers;
+
+      // 模範解答ボタンの表示切り替え（操作パネル）
+      const btnModelText = document.getElementById('btn-toggle-model-text');
+      const btnModelIcon = document.getElementById('btn-toggle-model-icon');
+      const btnModel = document.getElementById('btn-toggle-model');
+      if (btnModel) {
+        if (isModelShown) {
+          btnModel.className = "bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition flex items-center gap-1.5";
+          btnModelText.textContent = "模範解答を非公開にする";
+          btnModelIcon.textContent = "🔒";
+        } else {
+          btnModel.className = "bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition flex items-center gap-1.5";
+          btnModelText.textContent = "模範解答を公開";
+          btnModelIcon.textContent = "💡";
+        }
+      }
+
+      // 模範解答ボタン（TV投影バー）
+      const tvBtnModelText = document.getElementById('tv-btn-toggle-model-text');
+      if (tvBtnModelText) {
+        tvBtnModelText.textContent = isModelShown ? "模範解答を非公開" : "模範解答を公開";
+      }
+
+      // スクリーン上部の模範解答バナー描画
+      const screenModelBanner = document.getElementById('teacher-screen-model-answer-banner');
+      const screenModelList = document.getElementById('teacher-screen-model-answers-list');
+      const questions = getActiveQuestions();
+
+      if (isModelShown && questions.some(q => q.modelAnswer)) {
+        screenModelBanner.classList.remove('hidden');
+        screenModelList.innerHTML = questions.map((q, idx) => `
+          <div class="bg-white p-3 rounded-lg border border-amber-300 shadow-sm">
+            <div class="text-xs font-bold text-slate-600 mb-1">${q.text}</div>
+            <div class="text-sm font-bold text-indigo-900 bg-indigo-50/50 p-2 rounded border border-indigo-100 whitespace-pre-wrap">
+              ${q.modelAnswer || '（模範解答未設定）'}
+            </div>
+          </div>
+        `).join('');
+      } else {
+        screenModelBanner.classList.add('hidden');
+      }
+
+      // 受付ステータスバッジ
       const badge = document.getElementById('teacher-status-badge');
       if (lesson.state.isAccepting) {
         badge.textContent = "回答受付中";
@@ -1070,8 +1187,8 @@
         }
       }
 
+      // 問題ごとタブ
       const byQContainer = document.getElementById('by-question-content');
-      const questions = getActiveQuestions();
       byQContainer.innerHTML = questions.map((q, qIdx) => `
         <div class="border rounded-xl p-4 bg-slate-50 space-y-3">
           <div class="flex justify-between items-center border-b pb-2">
@@ -1093,6 +1210,7 @@
         </div>
       `).join('');
 
+      // 個別確認タブ
       const select = document.getElementById('teacher-student-select');
       const curVal = select.value;
       select.innerHTML = '<option value="">選択してください</option>' +
@@ -1171,6 +1289,24 @@
       }
 
       document.getElementById('student-form-title').textContent = lesson.state.mode === 'individual' ? '理科の回答を入力（個人）' : '班の回答を入力（話し合い活動）';
+
+      // 子機画面の模範解答・解説バナー同期表示
+      const studentModelBanner = document.getElementById('student-model-answers-banner');
+      const studentModelContent = document.getElementById('student-model-answers-content');
+      const questions = getActiveQuestions();
+      const isModelShown = !!lesson.state.showModelAnswers;
+
+      if (isModelShown && questions.some(q => q.modelAnswer)) {
+        studentModelBanner.classList.remove('hidden');
+        studentModelContent.innerHTML = questions.map((q, idx) => `
+          <div class="bg-white p-3 rounded-lg border border-amber-300">
+            <div class="font-bold text-xs text-slate-600 mb-1">${q.text}</div>
+            <div class="font-bold text-indigo-900 bg-indigo-50/50 p-2.5 rounded border border-indigo-100 whitespace-pre-wrap">${q.modelAnswer || '（解説なし）'}</div>
+          </div>
+        `).join('');
+      } else {
+        studentModelBanner.classList.add('hidden');
+      }
 
       const currentAnswers = getCurrentModeAnswers();
 
