@@ -444,7 +444,8 @@
 
     let activeLessonId = null;
     let isEditingMode = false;
-    let tempPhotos = {};
+    let currentObservedMode = null; // 子機のモード切り替わり監視用
+    let tempPhotosByMode = { individual: {}, group: {} };
     let isTvModeActive = false;
 
     let draftQuestions = [];
@@ -455,7 +456,12 @@
       mySubmissionId = 'sub_' + Math.random().toString(36).substring(2, 10);
       localStorage.setItem('my_submission_id', mySubmissionId);
     }
-    let lastMyAnswer = null;
+    
+    // 個人ワークと班活動で回答を分離して保持
+    let lastAnswersByMode = {
+      individual: null,
+      group: null
+    };
 
     // =========================================================
     // 起動・クラウド監視リスナー
@@ -1251,18 +1257,21 @@
     // =========================================================
     // 子機（生徒）表示更新
     // =========================================================
-    function getMySubmissionKey(lesson) {
-      if (!lesson) return mySubmissionId;
-      if (lesson.state.mode === 'group') {
-        const savedGroupName = localStorage.getItem(`group_choice_${lesson.id}`);
-        return savedGroupName || null;
-      }
-      return mySubmissionId;
+    function getSelectedGroupName(lessonId) {
+      return localStorage.getItem(`group_choice_${lessonId}`) || '1班';
     }
 
     function updateStudentViews() {
       const lesson = getActiveLesson();
       if (!lesson) return;
+
+      const targetMode = lesson.state.mode || 'individual';
+
+      // モード（個人ワーク ↔ 班活動）の切り替えを検知したら修正モードをリセット
+      if (currentObservedMode !== targetMode) {
+        currentObservedMode = targetMode;
+        isEditingMode = false;
+      }
 
       document.getElementById('student-view-title').textContent = lesson.title;
       document.getElementById('student-header-title').textContent = lesson.title;
@@ -1276,7 +1285,7 @@
       const headerModeBadge = document.getElementById('student-header-mode-badge');
       const statusBadge = document.getElementById('student-status-badge');
 
-      const modeText = lesson.state.mode === 'individual' ? '👤 個人ワーク' : '👥 班活動';
+      const modeText = targetMode === 'individual' ? '👤 個人ワーク' : '👥 班活動';
       if (modeBadge) modeBadge.textContent = modeText;
       if (headerModeBadge) headerModeBadge.textContent = modeText;
 
@@ -1289,7 +1298,7 @@
           : 'text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
       }
 
-      document.getElementById('student-form-title').textContent = lesson.state.mode === 'individual' ? '理科の回答を入力（個人）' : '班の回答を入力（話し合い活動）';
+      document.getElementById('student-form-title').textContent = targetMode === 'individual' ? '理科の回答を入力（個人）' : '班の回答を入力（話し合い活動）';
 
       // 模範解答の表示制御
       const studentModelBanner = document.getElementById('student-model-answers-banner');
@@ -1309,28 +1318,23 @@
         studentModelBanner.classList.add('hidden');
       }
 
-      // 既存の提出データを特定
-      const currentMode = lesson.state.mode;
+      // 現在のモードに応じた回答データを特定
       const allAnswers = lesson.state.answers || {};
-      
       let foundMyAns = null;
-      if (currentMode === 'individual') {
+
+      if (targetMode === 'individual') {
         foundMyAns = allAnswers[mySubmissionId] || null;
       } else {
-        const savedGroupName = localStorage.getItem(`group_choice_${lesson.id}`);
+        const savedGroupName = getSelectedGroupName(lesson.id);
         if (savedGroupName && allAnswers[savedGroupName] && allAnswers[savedGroupName].mode === 'group') {
           foundMyAns = allAnswers[savedGroupName];
-        } else if (lastMyAnswer && lastMyAnswer.mode === 'group' && allAnswers[lastMyAnswer.name]) {
-          foundMyAns = allAnswers[lastMyAnswer.name];
         }
       }
-      if (foundMyAns) {
-        lastMyAnswer = foundMyAns;
-      }
-
+      
+      lastAnswersByMode[targetMode] = foundMyAns;
       const hasSubmitted = !!foundMyAns;
 
-      // 締切時のメッセージ調整
+      // 締切時のメッセージ表示調整
       const peerTitle = document.getElementById('peer-review-title');
       const peerStatus = document.getElementById('peer-review-status-text');
       if (!isAccepting) {
@@ -1346,35 +1350,31 @@
         peerStatus.textContent = "クラスの回答を参考に見てみましょう";
       }
 
-      // 「回答を修正」ボタン：受付中 かつ 提出済み のときのみ表示
+      // 「回答を修正」ボタンの表示切替
       if (isAccepting && hasSubmitted) {
         btnEdit.classList.remove('hidden');
       } else {
         btnEdit.classList.add('hidden');
       }
 
-      // 画面の出し分けルール
+      // 画面の出し分け制御
       if (!isAccepting) {
-        // 1. 強制締め切り時: 編集画面を閉じ、全員クラス回答一覧画面を表示
         isEditingMode = false;
         waiting.classList.add('hidden');
         form.classList.add('hidden');
         peerCard.classList.remove('hidden');
         renderPeerAnswers();
       } else if (isEditingMode) {
-        // 2. 受付中で、明示的に修正ボタンを押した時
         waiting.classList.add('hidden');
         form.classList.remove('hidden');
         peerCard.classList.add('hidden');
         renderStudentInputForm();
       } else if (hasSubmitted) {
-        // 3. 受付中で、すでに送信済みの場合: 一覧カード表示（修正ボタンあり）
         waiting.classList.add('hidden');
         form.classList.add('hidden');
         peerCard.classList.remove('hidden');
         renderPeerAnswers();
       } else {
-        // 4. 受付中で、未提出の場合: 入力フォーム表示
         waiting.classList.add('hidden');
         form.classList.remove('hidden');
         peerCard.classList.add('hidden');
@@ -1382,25 +1382,45 @@
       }
     }
 
+    function onStudentGroupChange(selectElem) {
+      const lesson = getActiveLesson();
+      if (!lesson) return;
+      const selectedGroup = selectElem.value;
+      localStorage.setItem(`group_choice_${lesson.id}`, selectedGroup);
+      
+      // 選択した班の既存提出があればフォームに反映
+      const allAnswers = lesson.state.answers || {};
+      const groupAns = allAnswers[selectedGroup];
+      if (groupAns && groupAns.mode === 'group') {
+        lastAnswersByMode.group = groupAns;
+      } else {
+        lastAnswersByMode.group = null;
+      }
+      renderStudentInputForm();
+    }
+
     function renderStudentInputForm() {
       const lesson = getActiveLesson();
       if (!lesson) return;
 
+      const targetMode = lesson.state.mode;
+      const myCurrentAnswer = lastAnswersByMode[targetMode];
       const nameBox = document.getElementById('student-name-container');
-      const defaultName = lastMyAnswer ? lastMyAnswer.name : '';
 
-      if (lesson.state.mode === 'individual') {
+      if (targetMode === 'individual') {
+        const defaultName = myCurrentAnswer ? myCurrentAnswer.name : '';
         nameBox.innerHTML = `
           <label class="block text-xs font-bold text-slate-600 mb-1">名前（氏名のみ）:</label>
           <input type="text" id="student-name-field" value="${defaultName}" placeholder="例: 山田 太郎" class="w-full p-2 border rounded-md text-sm">
         `;
       } else {
+        const defaultGroup = myCurrentAnswer ? myCurrentAnswer.name : getSelectedGroupName(lesson.id);
         nameBox.innerHTML = `
           <label class="block text-xs font-bold text-slate-600 mb-1">班の選択:</label>
-          <select id="student-name-field" class="w-full p-2 border rounded-md text-sm bg-slate-50 font-bold text-teal-800">
+          <select id="student-name-field" onchange="onStudentGroupChange(this)" class="w-full p-2 border rounded-md text-sm bg-slate-50 font-bold text-teal-800">
             ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => {
               const val = `${n}班`;
-              return `<option value="${val}" ${val === defaultName ? 'selected' : ''}>${val}</option>`;
+              return `<option value="${val}" ${val === defaultGroup ? 'selected' : ''}>${val}</option>`;
             }).join('')}
           </select>
         `;
@@ -1408,7 +1428,7 @@
 
       const hintsContainer = document.getElementById('student-hints-container');
       const hintsList = document.getElementById('student-hints-list');
-      if (lesson.state.mode === 'group' && lesson.state.hints && lesson.state.hints.length > 0) {
+      if (targetMode === 'group' && lesson.state.hints && lesson.state.hints.length > 0) {
         hintsContainer.classList.remove('hidden');
         hintsList.innerHTML = lesson.state.hints.map(h => `
           <details class="group bg-amber-50/80 border border-amber-200 rounded-lg p-3 cursor-pointer hover:bg-amber-100/50 transition select-none">
@@ -1428,10 +1448,13 @@
 
       const questions = getActiveQuestions();
       const qContainer = document.getElementById('student-questions-container');
+      const currentPhotos = tempPhotosByMode[targetMode];
+
       qContainer.innerHTML = questions.map((q, idx) => {
-        const prevAnswer = lastMyAnswer?.responses[idx]?.answer || '';
-        const prevPhoto = lastMyAnswer?.responses[idx]?.photo || tempPhotos[idx] || null;
-        if (prevPhoto) tempPhotos[idx] = prevPhoto;
+        // 現在のモードの回答のみを挿入
+        const prevAnswer = myCurrentAnswer?.responses[idx]?.answer || '';
+        const prevPhoto = myCurrentAnswer?.responses[idx]?.photo || currentPhotos[idx] || null;
+        if (prevPhoto) currentPhotos[idx] = prevPhoto;
 
         return `
           <div class="border p-4 rounded-xl bg-slate-50 space-y-3">
@@ -1449,7 +1472,7 @@
         `;
       }).join('');
 
-      document.getElementById('btn-submit-student').textContent = lastMyAnswer ? '修正した回答を送信する' : '回答を送信する';
+      document.getElementById('btn-submit-student').textContent = myCurrentAnswer ? '修正した回答を送信する' : '回答を送信する';
     }
 
     function editMyAnswer() {
@@ -1466,6 +1489,9 @@
       const file = inputElem.files[0];
       if (!file) return;
 
+      const lesson = getActiveLesson();
+      const currentMode = lesson ? lesson.state.mode : 'individual';
+
       const reader = new FileReader();
       reader.onload = function(e) {
         const img = new Image();
@@ -1479,7 +1505,7 @@
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
           const base64 = canvas.toDataURL('image/jpeg', 0.5);
-          tempPhotos[qIndex] = base64;
+          tempPhotosByMode[currentMode][qIndex] = base64;
 
           const previewBox = document.getElementById(`preview-box-${qIndex}`);
           const previewImg = document.getElementById(`preview-img-${qIndex}`);
@@ -1495,6 +1521,7 @@
       const lesson = getActiveLesson();
       if (!lesson) return;
 
+      const currentMode = lesson.state.mode;
       const submitBtn = document.getElementById('btn-submit-student');
       if (submitBtn) submitBtn.disabled = true;
 
@@ -1503,7 +1530,7 @@
 
       if (!name) {
         if (isForceClose) {
-          name = lesson.state.mode === 'individual' ? '生徒（途中回収）' : '未選択班';
+          name = currentMode === 'individual' ? '生徒（途中回収）' : '未選択班';
         } else {
           alert('名前または班を入力してください');
           if (submitBtn) submitBtn.disabled = false;
@@ -1511,30 +1538,31 @@
         }
       }
 
-      if (lesson.state.mode === 'group') {
+      if (currentMode === 'group') {
         localStorage.setItem(`group_choice_${lesson.id}`, name);
       }
 
       const questions = getActiveQuestions();
+      const currentPhotos = tempPhotosByMode[currentMode];
       const responses = questions.map((q, idx) => {
         const elem = document.getElementById(`stu-ans-${idx}`);
         return {
           question: q.text,
           answer: elem ? elem.value.trim() : '',
-          photo: tempPhotos[idx] || null
+          photo: currentPhotos[idx] || null
         };
       });
 
-      const uniqueKey = (lesson.state.mode === 'group') ? name : mySubmissionId;
+      const uniqueKey = (currentMode === 'group') ? name : mySubmissionId;
       const newAns = {
         submissionKey: uniqueKey,
-        mode: lesson.state.mode,
+        mode: currentMode,
         name: name,
         responses: responses,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
-      lastMyAnswer = newAns;
+      lastAnswersByMode[currentMode] = newAns;
 
       db.ref(`classroom/lessons/${lesson.id}/state/answers/${uniqueKey}`).set(newAns).then(() => {
         isEditingMode = false;
@@ -1551,10 +1579,11 @@
       const lesson = getActiveLesson();
       if (!lesson) return;
 
+      const targetMode = lesson.state.mode;
       const container = document.getElementById('student-peer-grid');
       const currentAnswers = getCurrentModeAnswers();
 
-      document.getElementById('peer-list-title').textContent = lesson.state.mode === 'individual' 
+      document.getElementById('peer-list-title').textContent = targetMode === 'individual' 
         ? '👥 クラスの回答一覧（個人：匿名）' 
         : '👥 各班の回答一覧（1〜9班）';
 
@@ -1563,11 +1592,14 @@
         return;
       }
 
-      const myKey = getMySubmissionKey(lesson);
+      const myKey = (targetMode === 'group') ? getSelectedGroupName(lesson.id) : mySubmissionId;
 
       container.innerHTML = currentAnswers.map((ans, idx) => {
         const displayName = ans.mode === 'individual' ? `生徒 ${String.fromCharCode(65 + (idx % 26))}` : ans.name;
-        const isMe = (ans.submissionKey === myKey) || (ans.mode === 'group' && lastMyAnswer && ans.name === lastMyAnswer.name);
+        const isMe = (ans.mode === targetMode) && (
+          (targetMode === 'individual' && ans.submissionKey === mySubmissionId) ||
+          (targetMode === 'group' && ans.name === myKey)
+        );
 
         return `
           <div class="p-4 border rounded-xl ${isMe ? 'bg-teal-50 border-teal-400 ring-2 ring-teal-200' : 'bg-slate-50'} space-y-3">
