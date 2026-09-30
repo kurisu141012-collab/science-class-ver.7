@@ -168,7 +168,6 @@
             🛑 強制締め切り
           </button>
           
-          <!-- 模範解答ワンクリック公開/非公開ボタン -->
           <button onclick="toggleShowModelAnswers()" id="btn-toggle-model" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-lg shadow text-sm transition flex items-center gap-1.5">
             <span id="btn-toggle-model-icon">💡</span> <span id="btn-toggle-model-text">模範解答を公開</span>
           </button>
@@ -446,6 +445,7 @@
     let isEditingMode = false;
     let currentObservedMode = null; // 子機のモード切り替わり監視用
     let tempPhotosByMode = { individual: {}, group: {} };
+    let tempDraftAnswersByMode = { individual: {}, group: {} }; // 他生徒送信時の入力消失防止バッファ
     let isTvModeActive = false;
 
     let draftQuestions = [];
@@ -491,7 +491,7 @@
           updateStudentViews();
         } else {
           if (activeLessonId) {
-            updateTeacherViews();
+            updateAllDisplays(); // モード変更や問題文更新を即時反映
           } else {
             renderGradeTabs();
             renderLessonCards();
@@ -1045,6 +1045,7 @@
         ? 'px-3 py-1.5 rounded-lg text-sm font-bold bg-emerald-600 text-white shadow hover:bg-emerald-700' 
         : 'px-3 py-1.5 rounded-lg text-sm font-bold bg-slate-200 text-slate-700 hover:bg-slate-300';
 
+      // モード切り替え時に親機の編集ドラフト・問題文一覧を最新モードへ再同期
       initDraftsFromLesson();
       renderTeacherQuestionEditor();
       renderTeacherHintsEditor();
@@ -1261,14 +1262,33 @@
       return localStorage.getItem(`group_choice_${lessonId}`) || '1班';
     }
 
+    // 入力中のテキストをローカルバッファへ退避
+    function backupCurrentFormInputs() {
+      const lesson = getActiveLesson();
+      if (!lesson) return;
+      const currentMode = lesson.state.mode || 'individual';
+      const questions = getActiveQuestions();
+      questions.forEach((_, idx) => {
+        const elem = document.getElementById(`stu-ans-${idx}`);
+        if (elem) {
+          tempDraftAnswersByMode[currentMode][idx] = elem.value;
+        }
+      });
+      const nameElem = document.getElementById('student-name-field');
+      if (nameElem && currentMode === 'individual') {
+        tempDraftAnswersByMode[currentMode]['name'] = nameElem.value;
+      }
+    }
+
     function updateStudentViews() {
       const lesson = getActiveLesson();
       if (!lesson) return;
 
       const targetMode = lesson.state.mode || 'individual';
+      const isModeChanged = (currentObservedMode !== targetMode);
 
-      // モード（個人ワーク ↔ 班活動）の切り替えを検知したら修正モードをリセット
-      if (currentObservedMode !== targetMode) {
+      // モード（個人ワーク ↔ 班活動）の切り替えを検知したら入力状態を更新
+      if (isModeChanged) {
         currentObservedMode = targetMode;
         isEditingMode = false;
       }
@@ -1364,25 +1384,26 @@
         form.classList.add('hidden');
         peerCard.classList.remove('hidden');
         renderPeerAnswers();
-      } else if (isEditingMode) {
+      } else if (isEditingMode || !hasSubmitted) {
         waiting.classList.add('hidden');
         form.classList.remove('hidden');
         peerCard.classList.add('hidden');
-        renderStudentInputForm();
-      } else if (hasSubmitted) {
+
+        // フォームがすでに表示されており、モード切替でない同期受信時はDOM再構築をスキップして入力中の文字消失を防ぐ
+        const isFormAlreadyRendered = document.getElementById('stu-ans-0') !== null;
+        if (!isFormAlreadyRendered || isModeChanged) {
+          renderStudentInputForm();
+        }
+      } else {
         waiting.classList.add('hidden');
         form.classList.add('hidden');
         peerCard.classList.remove('hidden');
         renderPeerAnswers();
-      } else {
-        waiting.classList.add('hidden');
-        form.classList.remove('hidden');
-        peerCard.classList.add('hidden');
-        renderStudentInputForm();
       }
     }
 
     function onStudentGroupChange(selectElem) {
+      backupCurrentFormInputs();
       const lesson = getActiveLesson();
       if (!lesson) return;
       const selectedGroup = selectElem.value;
@@ -1405,13 +1426,14 @@
 
       const targetMode = lesson.state.mode;
       const myCurrentAnswer = lastAnswersByMode[targetMode];
+      const draftAnswers = tempDraftAnswersByMode[targetMode] || {};
       const nameBox = document.getElementById('student-name-container');
 
       if (targetMode === 'individual') {
-        const defaultName = myCurrentAnswer ? myCurrentAnswer.name : '';
+        const defaultName = draftAnswers['name'] !== undefined ? draftAnswers['name'] : (myCurrentAnswer ? myCurrentAnswer.name : '');
         nameBox.innerHTML = `
           <label class="block text-xs font-bold text-slate-600 mb-1">名前（氏名のみ）:</label>
-          <input type="text" id="student-name-field" value="${defaultName}" placeholder="例: 山田 太郎" class="w-full p-2 border rounded-md text-sm">
+          <input type="text" id="student-name-field" oninput="backupCurrentFormInputs()" value="${defaultName}" placeholder="例: 山田 太郎" class="w-full p-2 border rounded-md text-sm">
         `;
       } else {
         const defaultGroup = myCurrentAnswer ? myCurrentAnswer.name : getSelectedGroupName(lesson.id);
@@ -1451,15 +1473,15 @@
       const currentPhotos = tempPhotosByMode[targetMode];
 
       qContainer.innerHTML = questions.map((q, idx) => {
-        // 現在のモードの回答のみを挿入
-        const prevAnswer = myCurrentAnswer?.responses[idx]?.answer || '';
+        // 現在編集中のバッファがあればそれを優先し、なければ過去の送信データを代入
+        const prevAnswer = draftAnswers[idx] !== undefined ? draftAnswers[idx] : (myCurrentAnswer?.responses[idx]?.answer || '');
         const prevPhoto = myCurrentAnswer?.responses[idx]?.photo || currentPhotos[idx] || null;
         if (prevPhoto) currentPhotos[idx] = prevPhoto;
 
         return `
           <div class="border p-4 rounded-xl bg-slate-50 space-y-3">
             <label class="block font-bold text-slate-800 text-sm">📌 ${q.text}</label>
-            <textarea id="stu-ans-${idx}" rows="2" placeholder="回答を入力..." class="w-full p-2 border rounded-md text-sm">${prevAnswer}</textarea>
+            <textarea id="stu-ans-${idx}" rows="2" oninput="backupCurrentFormInputs()" placeholder="回答を入力..." class="w-full p-2 border rounded-md text-sm">${prevAnswer}</textarea>
             
             <div>
               <label class="block text-xs font-bold text-teal-700 mb-1">📸 写真・スケッチ（任意）</label>
@@ -1566,6 +1588,7 @@
 
       db.ref(`classroom/lessons/${lesson.id}/state/answers/${uniqueKey}`).set(newAns).then(() => {
         isEditingMode = false;
+        tempDraftAnswersByMode[currentMode] = {}; // 送信成功時に一時バッファをリセット
         if (submitBtn) submitBtn.disabled = false;
         updateStudentViews();
         showToast('🚀 回答を先生に送信しました！');
